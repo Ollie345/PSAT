@@ -1,7 +1,9 @@
 "use client"
 
-import HealthAssessmentFlow from "@/components/HealthAssessmentFlow"
+import LandingPage from "@/components/LandingPage"
+import { useRouter } from "next/navigation"
 
 export default function HomePage() {
-  return <HealthAssessmentFlow />
+  const router = useRouter()
+  return <LandingPage onStartAssessment={() => router.push("/assessment")} />
 }
