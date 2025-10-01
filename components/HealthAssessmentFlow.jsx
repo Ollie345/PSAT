@@ -60,27 +60,7 @@ const HealthAssessmentFlow = () => {
       setCurrentQuestionIndex((prev) => prev + 1)
     } else {
       // Submit assessment
-      setIsSubmitting(true)
-      setTimeout(() => {
-        setResults({
-          success: true,
-          score: 16,
-          severity: "Moderate",
-          severityColor: "yellow",
-          ageContext: "About 40% of men in their 40s have enlargement; not all have symptoms.",
-          medicalContext: ["No significant medical factors noted that would directly impact urinary symptoms."],
-          recommendations: "Schedule an appointment with your healthcare provider. Medications or minimally invasive options may be helpful.",
-          redFlags: [
-            "Complete inability to urinate",
-            "Painful or burning urination",
-            "Blood in urine",
-            "Fever or chills",
-            "Severe abdominal or back pain"
-          ]
-        })
-        setCurrentStep("results")
-        setIsSubmitting(false)
-      }, 1000)
+      setIsSubmitting(true)n      setError("")nn      try {n        const assessmentData = {n          demographics,n          medicalHistory,n          responses: responsesArray,n        }nn        const response = await fetch("/api/submit-assessment", {n          method: "POST",n          headers: {n            "Content-Type": "application/json",n          },n          body: JSON.stringify(assessmentData),n        })nn        if (!response.ok) {n          throw new Error(`API Error: ${response.status} ${response.statusText}`)n        }nn        const result = await response.json()n        setResults(result)n        setCurrentStep("results")n      } catch (err) {n        console.error("Submission error:", err)n        setError(err.message || "Something went wrong. Please try again.")n        setCurrentStep("symptoms")n      } finally {n        setIsSubmitting(false)n      }      }, 1000)
     }
   }
 
