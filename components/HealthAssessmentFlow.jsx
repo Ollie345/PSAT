@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import LandingPage from "./LandingPage"
 import DemographicsPage from "./DemographicsPage"
 import MedicalHistoryPage from "./MedicalHistoryPage"
 import SymptomsPage from "./SymptomsPage"
 import ResultsPage from "./ResultsPage"
+import ProgressCircles from "./ProgressCircles"
 
 // I-PSS Questions (0-5 scale: Never → Almost always)
 const ipssQuestions = [
@@ -59,49 +59,9 @@ const HealthAssessmentFlow = () => {
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
     } else {
-      handleSubmitAssessment()
-    }
-  }
-
-  const handlePreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
-    } else {
-      setCurrentStep("medical")
-    }
-  }
-
-  const handleBackToMedical = () => {
-    setCurrentStep("medical")
-  }
-
-  const handleBackToDemographics = () => {
-    setCurrentStep("landing")
-  }
-
-  const handleSubmitAssessment = async () => {
-    setIsSubmitting(true)
-    setError("")
-
-    try {
-      // Ensure we have responses for all 7 questions (0-6)
-      const responsesArray = []
-      for (let i = 0; i < totalQuestions; i++) {
-        responsesArray.push(responses[i] !== undefined ? responses[i] : 0)
-      }
-
-      const assessmentData = {
-        demographics,
-        medicalHistory,
-        responses: responsesArray,
-      }
-
-      console.log("Submitting assessment:", assessmentData)
-
-      // For now, we'll simulate the API call since we don't have the database set up yet
-      // In production, this would call the actual API
+      // Submit assessment
+      setIsSubmitting(true)
       setTimeout(() => {
-        // Mock successful response
         setResults({
           success: true,
           score: 16,
@@ -121,17 +81,19 @@ const HealthAssessmentFlow = () => {
         setCurrentStep("results")
         setIsSubmitting(false)
       }, 1000)
+    }
+  }
 
-    } catch (err) {
-      console.error("Submission error:", err)
-      setError(err.message || "Something went wrong. Please try again.")
-      setCurrentStep("symptoms") // Stay on symptoms page if error
-      setIsSubmitting(false)
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex((prev) => prev - 1)
+    } else {
+      setCurrentStep("medical")
     }
   }
 
   const handleStartOver = () => {
-    setCurrentStep("landing")
+    setCurrentStep("demographics")
     setCurrentQuestionIndex(0)
     setResponses({})
     setDemographics({ age: "", sex: "" })
@@ -140,9 +102,8 @@ const HealthAssessmentFlow = () => {
     setError("")
   }
 
-  // Progress calculation for 4 circles (0 = landing page)
+  // Progress calculation for 4 circles
   const getProgressCircle = () => {
-    if (currentStep === "landing") return 0
     if (currentStep === "demographics") return 1
     if (currentStep === "medical") return 2
     if (currentStep === "symptoms") {
@@ -150,19 +111,10 @@ const HealthAssessmentFlow = () => {
       return currentQuestionIndex < 2 ? 3 : 4
     }
     if (currentStep === "results") return 4
-    return 0
-  }
-
-    if (currentStep === "results") return 4
     return 1
   }
 
   // Render current step
-  if (currentStep === "landing") {
-    return <LandingPage onStartAssessment={() => setCurrentStep("landing")} />
-  }
-
-  
   if (currentStep === "demographics") {
     return (
       <DemographicsPage
@@ -178,7 +130,7 @@ const HealthAssessmentFlow = () => {
       <MedicalHistoryPage
         medicalHistory={medicalHistory}
         onSubmit={handleMedicalHistorySubmit}
-        onPrevious={handleBackToDemographics}
+        onPrevious={() => setCurrentStep("demographics")}
         progressCircle={getProgressCircle()}
       />
     )
