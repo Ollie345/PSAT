@@ -5,6 +5,7 @@ import DemographicsPage from "./DemographicsPage"
 import MedicalHistoryPage from "./MedicalHistoryPage"
 import SymptomsPage from "./SymptomsPage"
 import ResultsPage from "./ResultsPage"
+import NameEmailPage from "./NameEmailPage"
 import ProgressCircles from "./ProgressCircles"
 
 // I-PSS Questions (0-5 scale: Never → Almost always)
@@ -19,7 +20,7 @@ const ipssQuestions = [
 ]
 
 const HealthAssessmentFlow = () => {
-  const [currentStep, setCurrentStep] = useState("demographics") // demographics, medical, symptoms, results
+  const [currentStep, setCurrentStep] = useState("demographics") // demographics, medical, symptoms, contact, results
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [responses, setResponses] = useState({})
   const [demographics, setDemographics] = useState({
@@ -35,6 +36,7 @@ const HealthAssessmentFlow = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [results, setResults] = useState(null)
+  const [contactInfo, setContactInfo] = useState({ fullName: "", email: "" })
 
   const totalQuestions = ipssQuestions.length
 
@@ -59,54 +61,8 @@ const HealthAssessmentFlow = () => {
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
     } else {
-      // Submit assessment
-      setIsSubmitting(true)
-      setError("")
-
-      // Ensure we have responses for all 7 questions (0-6)
-      const responsesArray = []
-      for (let i = 0; i < totalQuestions; i++) {
-        responsesArray.push(responses[i] !== undefined ? responses[i] : 0)
-      }
-
-      try {
-        const assessmentData = {
-          demographics,
-          medicalHistory,
-          responses: responsesArray,
-        }
-
-        fetch("/api/submit-assessment", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(assessmentData),
-        })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`)
-          }
-          return response.json()
-        })
-        .then(result => {
-          setResults(result)
-          setCurrentStep("results")
-        })
-        .catch(err => {
-          console.error("Submission error:", err)
-          setError(err.message || "Something went wrong. Please try again.")
-          setCurrentStep("symptoms")
-        })
-        .finally(() => {
-          setIsSubmitting(false)
-        })
-      } catch (err) {
-        console.error("Submission error:", err)
-        setError(err.message || "Something went wrong. Please try again.")
-        setCurrentStep("symptoms")
-        setIsSubmitting(false)
-      }
+      // Completed questions → go to contact step
+      setCurrentStep("contact")
     }
   }
 
@@ -115,6 +71,67 @@ const HealthAssessmentFlow = () => {
       setCurrentQuestionIndex((prev) => prev - 1)
     } else {
       setCurrentStep("medical")
+    }
+  }
+
+  const handleContactChange = (e) => {
+    const { name, value } = e.target
+    setContactInfo(prev => ({ ...prev, [name]: value }))
+    if (error) setError("")
+  }
+
+  const handleContactSubmit = (e) => {
+    e.preventDefault()
+    if (!contactInfo.fullName || !contactInfo.email) {
+      setError("Please enter your name and email")
+      return
+    }
+
+    // Submit assessment after collecting contact info
+    setIsSubmitting(true)
+    setError("")
+
+    const responsesArray = []
+    for (let i = 0; i < totalQuestions; i++) {
+      responsesArray.push(responses[i] !== undefined ? responses[i] : 0)
+    }
+
+    try {
+      const assessmentData = {
+        demographics,
+        medicalHistory,
+        responses: responsesArray,
+        contact: contactInfo,
+      }
+
+      fetch("/api/submit-assessment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(assessmentData),
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status} ${response.statusText}`)
+        }
+        return response.json()
+      })
+      .then(result => {
+        setResults(result)
+        setCurrentStep("results")
+      })
+      .catch(err => {
+        console.error("Submission error:", err)
+        setError(err.message || "Something went wrong. Please try again.")
+      })
+      .finally(() => {
+        setIsSubmitting(false)
+      })
+    } catch (err) {
+      console.error("Submission error:", err)
+      setError(err.message || "Something went wrong. Please try again.")
+      setIsSubmitting(false)
     }
   }
 
@@ -136,6 +153,7 @@ const HealthAssessmentFlow = () => {
       // Split symptoms into two parts for 4-circle progress
       return currentQuestionIndex < 2 ? 3 : 4
     }
+    if (currentStep === "contact") return 4
     if (currentStep === "results") return 4
     return 1
   }
@@ -174,6 +192,20 @@ const HealthAssessmentFlow = () => {
         onPrevious={handlePreviousQuestion}
         progressCircle={getProgressCircle()}
         isSubmitting={isSubmitting}
+      />
+    )
+  }
+
+  if (currentStep === "contact") {
+    return (
+      <NameEmailPage
+        contactInfo={contactInfo}
+        onChange={handleContactChange}
+        onSubmit={handleContactSubmit}
+        onPrevious={() => setCurrentStep("symptoms")}
+        isSubmitting={isSubmitting}
+        error={error}
+        progressCircle={getProgressCircle()}
       />
     )
   }

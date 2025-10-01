@@ -66,12 +66,21 @@ export async function POST(req: Request) {
     if (score >= 20) severity = "Severe"
     else if (score >= 8) severity = "Moderate"
 
+    // Extract optional contact info
+    let fullName: string | null = null
+    let email: string | null = null
+    if (body.contact && typeof body.contact === "object") {
+      const c = body.contact as Record<string, unknown>
+      if (typeof c.fullName === "string" && c.fullName.trim()) fullName = c.fullName.trim()
+      if (typeof c.email === "string" && c.email.trim()) email = c.email.trim().toLowerCase()
+    }
+
     // Save assessment to database
     try {
       const savedAssessment = await prisma.prostateAssessment.create({
         data: {
-          fullName: "Anonymous User",
-          email: `anonymous_${Date.now()}@temp.com`,
+          fullName: fullName || "Anonymous User",
+          email: email || `anonymous_${Date.now()}@temp.com`,
           age: age,
           sex: demo.sex,
           medicalConditions: med.conditions,
