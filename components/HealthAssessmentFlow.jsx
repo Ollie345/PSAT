@@ -60,7 +60,53 @@ const HealthAssessmentFlow = () => {
       setCurrentQuestionIndex((prev) => prev + 1)
     } else {
       // Submit assessment
-      setIsSubmitting(true)n      setError("")nn      try {n        const assessmentData = {n          demographics,n          medicalHistory,n          responses: responsesArray,n        }nn        const response = await fetch("/api/submit-assessment", {n          method: "POST",n          headers: {n            "Content-Type": "application/json",n          },n          body: JSON.stringify(assessmentData),n        })nn        if (!response.ok) {n          throw new Error(`API Error: ${response.status} ${response.statusText}`)n        }nn        const result = await response.json()n        setResults(result)n        setCurrentStep("results")n      } catch (err) {n        console.error("Submission error:", err)n        setError(err.message || "Something went wrong. Please try again.")n        setCurrentStep("symptoms")n      } finally {n        setIsSubmitting(false)n      }      }, 1000)
+      setIsSubmitting(true)
+      setError("")
+
+      // Ensure we have responses for all 7 questions (0-6)
+      const responsesArray = []
+      for (let i = 0; i < totalQuestions; i++) {
+        responsesArray.push(responses[i] !== undefined ? responses[i] : 0)
+      }
+
+      try {
+        const assessmentData = {
+          demographics,
+          medicalHistory,
+          responses: responsesArray,
+        }
+
+        fetch("/api/submit-assessment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(assessmentData),
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`API Error: ${response.status} ${response.statusText}`)
+          }
+          return response.json()
+        })
+        .then(result => {
+          setResults(result)
+          setCurrentStep("results")
+        })
+        .catch(err => {
+          console.error("Submission error:", err)
+          setError(err.message || "Something went wrong. Please try again.")
+          setCurrentStep("symptoms")
+        })
+        .finally(() => {
+          setIsSubmitting(false)
+        })
+      } catch (err) {
+        console.error("Submission error:", err)
+        setError(err.message || "Something went wrong. Please try again.")
+        setCurrentStep("symptoms")
+        setIsSubmitting(false)
+      }
     }
   }
 

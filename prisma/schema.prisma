@@ -1,0 +1,43 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ProstateAssessment {
+  id                     Int      @id @default(autoincrement())
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+  fullName               String   @map("full_name")
+  email                  String   @unique @map("email")
+  phone                  String?  @map("phone")
+  consentGiven           Boolean  @default(false) @map("consent_given")
+  consentTimestamp       DateTime? @map("consent_timestamp")
+  age                    Int      @map("age")
+  sex                    String   @map("sex")
+  medicalConditions      Json     @default("[]") @map("medical_conditions")
+  medications            String?  @map("medications")
+  familyHistory          String?  @map("family_history")
+  surgeries              String?  @map("surgeries")
+  q1IncompleteEmptying   Int?     @map("q1_incomplete_emptying")
+  q2Frequency            Int?     @map("q2_frequency")
+  q3Intermittency        Int?     @map("q3_intermittency")
+  q4Urgency              Int?     @map("q4_urgency")
+  q5WeakStream           Int?     @map("q5_weak_stream")
+  q6Straining            Int?     @map("q6_straining")
+  q7Nocturia             Int?     @map("q7_nocturia")
+  totalScore             Int?     @map("total_score")
+  severityLevel          String?  @map("severity_level")
+  completedAt            DateTime? @map("completed_at")
+  leadStatus             String   @default("new") @map("lead_status")
+  leadSource             String   @default("prostate_assessment") @map("lead_source")
+  followUpNotes          String?  @map("follow_up_notes")
+
+  @@map("prostate_assessment")
+}
