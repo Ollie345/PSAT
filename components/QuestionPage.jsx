@@ -1,0 +1,97 @@
+"use client"
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
+import { ArrowLeft, ArrowRight } from "lucide-react"
+
+const QuestionPage = ({
+  question,
+  questionKey,
+  currentIndex,
+  totalQuestions,
+  response,
+  onResponse,
+  onNext,
+  onPrevious,
+}) => {
+  const progress = ((currentIndex + 1) / totalQuestions) * 100
+
+  return (
+    <div className="w-full max-w-lg mx-auto space-y-4 sm:space-y-6 px-4">
+      {/* Progress */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-xs sm:text-sm text-gray-600">
+          <span>
+            Question {currentIndex + 1} of {totalQuestions}
+          </span>
+          <span>{Math.round(progress)}% complete</span>
+        </div>
+        <Progress value={progress} className="h-2" />
+      </div>
+
+      {/* Question Card */}
+      <Card>
+        <CardHeader className="pb-4 sm:pb-6">
+          <CardTitle className="text-lg sm:text-xl text-gray-900 leading-tight">{question}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 sm:space-y-6">
+          {/* Answer Options */}
+          <div className="space-y-3">
+            {["yes", "sometimes", "no"].map((option) => (
+              <label
+                key={option}
+                className={`flex items-center p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  response === option ? "border-rose-500 bg-rose-50" : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={questionKey}
+                  value={option}
+                  checked={response === option}
+                  onChange={(e) => onResponse(e.target.value)}
+                  className="sr-only"
+                />
+                <div
+                  className={`w-4 h-4 rounded-full border-2 mr-3 flex-shrink-0 ${
+                    response === option ? "border-rose-500 bg-rose-500" : "border-gray-300"
+                  }`}
+                >
+                  {response === option && <div className="w-full h-full rounded-full bg-white scale-50"></div>}
+                </div>
+                <span className="text-base sm:text-lg capitalize font-medium">
+                  {option === "yes" ? "Yes" : option === "sometimes" ? "Sometimes" : "No"}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {/* Navigation */}
+          <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 pt-4">
+            <Button
+              onClick={onPrevious}
+              variant="outline"
+              disabled={currentIndex === 0}
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Previous
+            </Button>
+
+            <Button
+              onClick={onNext}
+              disabled={!response}
+              className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 w-full sm:w-auto"
+            >
+              {currentIndex === totalQuestions - 1 ? "Continue to Personal Info" : "Next"}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default QuestionPage
