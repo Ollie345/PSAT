@@ -13,6 +13,8 @@ export async function GET(req: Request) {
       take: limit,
       orderBy: { createdAt: "desc" },
       select: {
+        fullName: true,
+        email: true,
         id: true,
         createdAt: true,
         completedAt: true,
