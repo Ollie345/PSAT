@@ -3,7 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react"
-import ProgressCircles from "./ProgressCircles"
+import { motion, useReducedMotion } from "framer-motion"
+import ProgressBar from "./ProgressBar"
 
 const ratingOptions = [
   { value: 0, label: "Never" },
@@ -26,6 +27,7 @@ const SymptomsPage = ({
   isSubmitting
 }) => {
   const progress = ((currentIndex + 1) / totalQuestions) * 100
+  const shouldReduce = useReducedMotion()
 
   const handleRatingSelect = (value) => {
     onResponse(value)
@@ -35,22 +37,8 @@ const SymptomsPage = ({
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">
-          {/* Progress Circles */}
-          <ProgressCircles activeCircle={progressCircle} />
-
-          {/* Progress within symptoms */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Symptom Assessment</span>
-              <span>{Math.round(progress)}% complete</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+          {/* 4-step Progress Bar */}
+          <ProgressBar activeStep={3} currentIndex={currentIndex} totalCount={totalQuestions} />
 
           {/* Question Card */}
           <Card>
@@ -71,8 +59,10 @@ const SymptomsPage = ({
                 </p>
                 <div className="space-y-2">
                   {ratingOptions.map((option) => (
-                    <label
+                    <motion.label
                       key={option.value}
+                      whileHover={shouldReduce ? undefined : { scale: 1.01 }}
+                      whileTap={shouldReduce ? undefined : { scale: 0.99 }}
                       className={`flex items-center p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-blue-300 ${
                         response === option.value ? "border-blue-500 bg-blue-50" : "border-gray-200"
                       }`}
@@ -95,7 +85,7 @@ const SymptomsPage = ({
                       <span className="text-sm sm:text-base font-medium">
                         {option.label}
                       </span>
-                    </label>
+                    </motion.label>
                   ))}
                 </div>
               </div>

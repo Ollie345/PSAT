@@ -1,5 +1,6 @@
 "use client"
 
+import ProgressBar from "./ProgressBar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -7,11 +8,12 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { User, Mail, ArrowLeft, ArrowRight, AlertCircle } from "lucide-react"
 
-const NameEmailPage = ({ contactInfo, onChange, onSubmit, onPrevious, isSubmitting, error, progressCircle: _unused }) => {
+const NameEmailPage = ({ contactInfo, onChange, onSubmit, onPrevious, isSubmitting, error }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-lg mx-auto space-y-6">
+          <ProgressBar activeStep={3} />
           <div className="text-center space-y-2">
             <h1 className="text-3xl font-bold text-gray-900">Send Results</h1>
             <p className="text-lg text-gray-600">Enter your details to view and receive your results</p>

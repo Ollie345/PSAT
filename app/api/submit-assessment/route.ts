@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
+import { odooAuthenticate, ensureTag, ensurePartner, createLead, postNote } from "@/lib/odoo"
 
 const prisma = new PrismaClient()
 
@@ -13,12 +14,9 @@ export async function POST(req: Request) {
     }
 
     const demo = body.demographics as Record<string, unknown>
-    if (!demo.age || typeof demo.age !== "string") {
-      return NextResponse.json({ detail: "Missing or invalid age" }, { status: 400 })
-    }
-
-    const age = parseInt(demo.age)
-    if (isNaN(age) || age < 18 || age > 120) {
+    const rawAge = (demo as any).age
+    const age = typeof rawAge === "number" ? rawAge : parseInt(String(rawAge), 10)
+    if (!Number.isFinite(age) || age < 18 || age > 120) {
       return NextResponse.json({ detail: "Age must be between 18 and 120" }, { status: 400 })
     }
 
@@ -66,6 +64,12 @@ export async function POST(req: Request) {
     if (score >= 20) severity = "Severe"
     else if (score >= 8) severity = "Moderate"
 
+    // Sanitize medical fields for type safety
+    const conditionsArr = Array.isArray(med.conditions) ? (med.conditions as string[]) : []
+    const medicationsStr = typeof (med as any).medications === "string" ? (med as any).medications as string : null
+    const familyHistoryStr = typeof (med as any).familyHistory === "string" ? (med as any).familyHistory as string : null
+    const surgeriesStr = typeof (med as any).surgeries === "string" ? (med as any).surgeries as string : null
+
     // Extract optional contact info
     let fullName: string | null = null
     let email: string | null = null
@@ -83,10 +87,10 @@ export async function POST(req: Request) {
           email: email || `anonymous_${Date.now()}@temp.com`,
           age: age,
           sex: demo.sex,
-          medicalConditions: med.conditions,
-          medications: med.medications || null,
-          familyHistory: med.familyHistory || null,
-          surgeries: med.surgeries || null,
+          medicalConditions: conditionsArr,
+          medications: medicationsStr,
+          familyHistory: familyHistoryStr,
+          surgeries: surgeriesStr,
           q1IncompleteEmptying: responses[0],
           q2Frequency: responses[1],
           q3Intermittency: responses[2],
@@ -101,6 +105,75 @@ export async function POST(req: Request) {
       })
 
       console.log("Assessment saved to database:", savedAssessment.id)
+
+      // Fire-and-forget Odoo push (non-blocking; errors are logged)
+      void (async () => {
+        try {
+          const conditions = conditionsArr
+          const responsesList = responses
+            .map((v, i) => `• Q${i + 1}: ${v}`)
+            .join("\n")
+
+          const descriptionLines: string[] = [
+            `Personal Information`,
+            `• Name: ${fullName || "Anonymous"}`,
+            `• Email: ${email || "N/A"}`,
+            `• Age: ${age}`,
+            `• Sex: ${String(demo.sex)}`,
+            ``,
+            `Assessment Results`,
+            `• I-PSS Score: ${score}/35`,
+            `• Severity: ${severity}`,
+            ``,
+            `Medical History`,
+            `• Conditions: ${conditions.length ? conditions.join(", ") : "None"}`,
+            `• Family History: ${familyHistoryStr ?? "N/A"}`,
+            `• Surgeries: ${surgeriesStr ?? "N/A"}`,
+            ``,
+            `Responses`,
+            responsesList,
+          ]
+          const description = descriptionLines.join("\n")
+
+          const uid = await odooAuthenticate()
+
+          // Ensure tags
+          const tagIds: number[] = []
+          try { tagIds.push(await ensureTag(uid, "Prostate Assessment")) } catch {}
+          try { tagIds.push(await ensureTag(uid, `I-PSS: ${severity}`)) } catch {}
+
+          // Ensure partner (only if email is real)
+          let partnerId: number | undefined
+          if (email && !email.startsWith("anonymous_")) {
+            try {
+              partnerId = await ensurePartner(uid, email, fullName || "Anonymous")
+            } catch (e) {
+              console.warn("Odoo ensurePartner failed:", e)
+            }
+          }
+
+          // Create lead
+          const leadPayload: Record<string, any> = {
+            name: `I-PSS Assessment - ${severity}`,
+            contact_name: fullName || "Anonymous",
+            email_from: email || undefined,
+            partner_id: partnerId,
+            description,
+          }
+          if (tagIds.length > 0) {
+            leadPayload.tag_ids = [[6, 0, tagIds]]
+          }
+
+          const leadId = await createLead(uid, leadPayload)
+
+          // Optional note
+          try {
+            await postNote(uid, leadId, "Lead created via web assessment integration.")
+          } catch {}
+        } catch (err) {
+          console.error("Odoo integration error:", err)
+        }
+      })()
 
     } catch (dbError) {
       console.error("Database save error:", dbError)

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Calendar, User, ArrowRight, AlertCircle } from "lucide-react"
-import ProgressCircles from "./ProgressCircles"
+import ProgressBar from "./ProgressBar"
 
 const DemographicsPage = ({ demographics, onSubmit, progressCircle }) => {
   const [formData, setFormData] = useState(demographics)
@@ -44,8 +44,7 @@ const DemographicsPage = ({ demographics, onSubmit, progressCircle }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">
-          {/* Progress Circles */}
-          <ProgressCircles activeCircle={progressCircle} />
+          <ProgressBar activeStep={1} />
 
           {/* Header */}
           <div className="text-center space-y-4">

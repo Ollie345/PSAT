@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle, BarChart3, RotateCcw, AlertTriangle, Calendar, Heart } from "lucide-react"
-import ProgressCircles from "./ProgressCircles"
+import ProgressBar from "./ProgressBar"
 
-const ResultsPage = ({ result, onStartOver, progressCircle, error }) => {
+const ResultsPage = ({ result, onStartOver, error }) => {
   const getSeverityColor = (severity) => {
     switch (severity.toLowerCase()) {
       case "mild": return "bg-green-100 text-green-800 border-green-200"
@@ -31,7 +31,7 @@ const ResultsPage = ({ result, onStartOver, progressCircle, error }) => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto space-y-6">
-            <ProgressCircles activeCircle={progressCircle} />
+            <ProgressBar activeStep={4} />
 
             <Card>
               <CardContent className="p-6 text-center">
@@ -54,7 +54,7 @@ const ResultsPage = ({ result, onStartOver, progressCircle, error }) => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto space-y-6">
-            <ProgressCircles activeCircle={progressCircle} />
+            <ProgressBar activeStep={4} />
 
             <Card>
               <CardContent className="p-6 text-center">
@@ -72,9 +72,9 @@ const ResultsPage = ({ result, onStartOver, progressCircle, error }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto space-y-6">
-          {/* Progress Circles */}
-          <ProgressCircles activeCircle={progressCircle} />
+          <div className="max-w-2xl mx-auto space-y-6">
+          {/* 4-step Progress Bar */}
+          <ProgressBar activeStep={4} />
 
           {/* Header */}
           <div className="text-center space-y-4">

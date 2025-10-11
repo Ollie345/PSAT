@@ -6,7 +6,9 @@ import MedicalHistoryPage from "./MedicalHistoryPage"
 import SymptomsPage from "./SymptomsPage"
 import ResultsPage from "./ResultsPage"
 import NameEmailPage from "./NameEmailPage"
-import ProgressCircles from "./ProgressCircles"
+import ProcessingPage from "./ProcessingPage"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+ 
 
 // I-PSS Questions (0-5 scale: Never → Almost always)
 const ipssQuestions = [
@@ -20,7 +22,7 @@ const ipssQuestions = [
 ]
 
 const HealthAssessmentFlow = () => {
-  const [currentStep, setCurrentStep] = useState("demographics") // demographics, medical, symptoms, contact, results
+  const [currentStep, setCurrentStep] = useState("demographics") // demographics, symptoms, contact, medical, processing, results
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [responses, setResponses] = useState({})
   const [demographics, setDemographics] = useState({
@@ -42,12 +44,12 @@ const HealthAssessmentFlow = () => {
 
   const handleDemographicsSubmit = (data) => {
     setDemographics(data)
-    setCurrentStep("medical")
+    setCurrentStep("symptoms")
   }
 
   const handleMedicalHistorySubmit = (data) => {
     setMedicalHistory(data)
-    setCurrentStep("symptoms")
+    submitAssessment(data)
   }
 
   const handleQuestionResponse = (response) => {
@@ -86,10 +88,14 @@ const HealthAssessmentFlow = () => {
       setError("Please enter your name and email")
       return
     }
+    setError("")
+    setCurrentStep("medical")
+  }
 
-    // Submit assessment after collecting contact info
+  const submitAssessment = async (medicalOverride) => {
     setIsSubmitting(true)
     setError("")
+    setCurrentStep("processing")
 
     const responsesArray = []
     for (let i = 0; i < totalQuestions; i++) {
@@ -99,38 +105,27 @@ const HealthAssessmentFlow = () => {
     try {
       const assessmentData = {
         demographics,
-        medicalHistory,
+        medicalHistory: medicalOverride || medicalHistory,
         responses: responsesArray,
         contact: contactInfo,
       }
 
-      fetch("/api/submit-assessment", {
+      const response = await fetch("/api/submit-assessment", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(assessmentData),
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status} ${response.statusText}`)
-        }
-        return response.json()
-      })
-      .then(result => {
-        setResults(result)
-        setCurrentStep("results")
-      })
-      .catch(err => {
-        console.error("Submission error:", err)
-        setError(err.message || "Something went wrong. Please try again.")
-      })
-      .finally(() => {
-        setIsSubmitting(false)
-      })
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`)
+      }
+      const result = await response.json()
+      setResults(result)
+      setCurrentStep("results")
     } catch (err) {
       console.error("Submission error:", err)
       setError(err.message || "Something went wrong. Please try again.")
+      setCurrentStep("results")
+    } finally {
       setIsSubmitting(false)
     }
   }
@@ -145,43 +140,20 @@ const HealthAssessmentFlow = () => {
     setError("")
   }
 
-  // Progress calculation for 4 circles
-  const getProgressCircle = () => {
-    if (currentStep === "demographics") return 1
-    if (currentStep === "medical") return 2
-    if (currentStep === "symptoms") {
-      // Split symptoms into two parts for 4-circle progress
-      return currentQuestionIndex < 2 ? 3 : 4
-    }
-    if (currentStep === "contact") return 4
-    if (currentStep === "results") return 4
-    return 1
-  }
+  
 
-  // Render current step
+  const shouldReduce = useReducedMotion()
+  let content = null
+
   if (currentStep === "demographics") {
-    return (
+    content = (
       <DemographicsPage
         demographics={demographics}
         onSubmit={handleDemographicsSubmit}
-        progressCircle={getProgressCircle()}
       />
     )
-  }
-
-  if (currentStep === "medical") {
-    return (
-      <MedicalHistoryPage
-        medicalHistory={medicalHistory}
-        onSubmit={handleMedicalHistorySubmit}
-        onPrevious={() => setCurrentStep("demographics")}
-        progressCircle={getProgressCircle()}
-      />
-    )
-  }
-
-  if (currentStep === "symptoms") {
-    return (
+  } else if (currentStep === "symptoms") {
+    content = (
       <SymptomsPage
         question={ipssQuestions[currentQuestionIndex]}
         currentIndex={currentQuestionIndex}
@@ -190,14 +162,11 @@ const HealthAssessmentFlow = () => {
         onResponse={handleQuestionResponse}
         onNext={handleNextQuestion}
         onPrevious={handlePreviousQuestion}
-        progressCircle={getProgressCircle()}
         isSubmitting={isSubmitting}
       />
     )
-  }
-
-  if (currentStep === "contact") {
-    return (
+  } else if (currentStep === "contact") {
+    content = (
       <NameEmailPage
         contactInfo={contactInfo}
         onChange={handleContactChange}
@@ -205,23 +174,41 @@ const HealthAssessmentFlow = () => {
         onPrevious={() => setCurrentStep("symptoms")}
         isSubmitting={isSubmitting}
         error={error}
-        progressCircle={getProgressCircle()}
       />
     )
-  }
-
-  if (currentStep === "results") {
-    return (
+  } else if (currentStep === "medical") {
+    content = (
+      <MedicalHistoryPage
+        medicalHistory={medicalHistory}
+        onSubmit={handleMedicalHistorySubmit}
+        onPrevious={() => setCurrentStep("contact")}
+      />
+    )
+  } else if (currentStep === "processing") {
+    content = <ProcessingPage />
+  } else if (currentStep === "results") {
+    content = (
       <ResultsPage
         result={results}
         onStartOver={handleStartOver}
-        progressCircle={getProgressCircle()}
         error={error}
       />
     )
   }
 
-  return null
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={currentStep}
+        initial={shouldReduce ? { opacity: 1 } : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={shouldReduce ? { opacity: 1 } : { opacity: 0, y: -8 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+      >
+        {content}
+      </motion.div>
+    </AnimatePresence>
+  )
 }
 
 export default HealthAssessmentFlow
