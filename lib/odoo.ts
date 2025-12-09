@@ -1,10 +1,12 @@
+import axios from "axios"
+
 type JsonRpcParams = {
   service: "common" | "object"
   method: string
   args: any[]
 }
 
-const ODOO_URL = process.env.ODOO_URL?.replace(/\/+$/, "")
+const ODOO_URL = (process.env.ODOO_URL || "").replace(/\/+$/, "")
 const ODOO_DB = process.env.ODOO_DB
 const ODOO_USERNAME = process.env.ODOO_USERNAME
 const ODOO_PASSWORD = process.env.ODOO_PASSWORD
@@ -17,23 +19,49 @@ function assertEnv() {
 
 async function jsonRpcCall<T>(params: JsonRpcParams): Promise<T> {
   assertEnv()
-  const res = await fetch(`${ODOO_URL}/jsonrpc`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", method: "call", params, id: 1 }),
-    cache: "no-store",
-  })
+  const url = `${ODOO_URL}/jsonrpc`
+  const started = Date.now()
+  try {
+    const res = await axios.post(
+      url,
+      { jsonrpc: "2.0", method: "call", params, id: 1 },
+      {
+        timeout: 15000,
+        headers: { "Content-Type": "application/json" },
+        validateStatus: (s) => s < 500,
+      },
+    )
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Odoo HTTP ${res.status}: ${text}`)
-  }
+    const duration = Date.now() - started
+    if (res.status >= 400) {
+      console.error("Odoo HTTP error", { status: res.status, data: res.data, duration })
+      throw new Error(`Odoo HTTP ${res.status}`)
+    }
 
-  const payload = (await res.json()) as any
-  if (payload.error) {
-    throw new Error(`Odoo RPC Error: ${JSON.stringify(payload.error)}`)
+    if (res.data?.error) {
+      console.error("Odoo RPC error", { error: res.data.error, duration })
+      throw new Error(`Odoo RPC Error: ${JSON.stringify(res.data.error)}`)
+    }
+
+    console.log("Odoo RPC success", { method: params.method, service: params.service, duration })
+    return res.data.result as T
+  } catch (err: any) {
+    const duration = Date.now() - started
+    if (err?.response) {
+      console.error("Odoo RPC failed", {
+        status: err.response.status,
+        data: err.response.data,
+        duration,
+      })
+    } else {
+      console.error("Odoo RPC failed", {
+        message: err?.message,
+        stack: err?.stack,
+        duration,
+      })
+    }
+    throw err
   }
-  return payload.result as T
 }
 
 export async function odooAuthenticate(): Promise<number> {

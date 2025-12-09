@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
 import { odooAuthenticate, ensureTag, ensurePartner, createLead, postNote } from "@/lib/odoo"
 
+export const maxDuration = 25
+
 const prisma = new PrismaClient()
 
 export async function POST(req: Request) {
@@ -112,75 +114,97 @@ export async function POST(req: Request) {
       // Continue - DB failure shouldn't block Odoo or response
     }
 
-    // Send to Odoo (fire-and-forget, independent of DB result)
-    void (async () => {
+    // Send to Odoo (awaited with timeout, independent of DB)
+    const odooSync = (async () => {
+      console.log("Odoo sync start", {
+        hasUrl: Boolean(process.env.ODOO_URL),
+        hasDb: Boolean(process.env.ODOO_DB),
+        hasUser: Boolean(process.env.ODOO_USERNAME),
+        hasPassword: Boolean(process.env.ODOO_PASSWORD),
+      })
+
+      const conditions = conditionsArr
+      const responsesList = responses
+        .map((v, i) => `• Q${i + 1}: ${v}`)
+        .join("\n")
+
+      const descriptionLines: string[] = [
+        `Personal Information`,
+        `• Name: ${fullName || "Anonymous"}`,
+        `• Email: ${email || "N/A"}`,
+        `• Age: ${age}`,
+        `• Sex: ${String(demo.sex)}`,
+        ``,
+        `Assessment Results`,
+        `• I-PSS Score: ${score}/35`,
+        `• Severity: ${severity}`,
+        ``,
+        `Medical History`,
+        `• Conditions: ${conditions.length ? conditions.join(", ") : "None"}`,
+        `• Family History: ${familyHistoryStr ?? "N/A"}`,
+        `• Surgeries: ${surgeriesStr ?? "N/A"}`,
+        ``,
+        `Responses`,
+        responsesList,
+      ]
+      const description = descriptionLines.join("\n")
+
+      const uid = await odooAuthenticate()
+      console.log("Odoo auth ok", { uid })
+
+      const tagIds: number[] = []
       try {
-        const conditions = conditionsArr
-        const responsesList = responses
-          .map((v, i) => `• Q${i + 1}: ${v}`)
-          .join("\n")
+        tagIds.push(await ensureTag(uid, "PSAT Assessment"))
+      } catch (e) {
+        console.warn("Odoo ensureTag PSAT Assessment failed", e)
+      }
+      try {
+        tagIds.push(await ensureTag(uid, `I-PSS: ${severity}`))
+      } catch (e) {
+        console.warn("Odoo ensureTag severity failed", e)
+      }
+      console.log("Odoo tags ensured", { tagIds })
 
-        const descriptionLines: string[] = [
-          `Personal Information`,
-          `• Name: ${fullName || "Anonymous"}`,
-          `• Email: ${email || "N/A"}`,
-          `• Age: ${age}`,
-          `• Sex: ${String(demo.sex)}`,
-          ``,
-          `Assessment Results`,
-          `• I-PSS Score: ${score}/35`,
-          `• Severity: ${severity}`,
-          ``,
-          `Medical History`,
-          `• Conditions: ${conditions.length ? conditions.join(", ") : "None"}`,
-          `• Family History: ${familyHistoryStr ?? "N/A"}`,
-          `• Surgeries: ${surgeriesStr ?? "N/A"}`,
-          ``,
-          `Responses`,
-          responsesList,
-        ]
-        const description = descriptionLines.join("\n")
-
-        const uid = await odooAuthenticate()
-
-        // Ensure tags
-        const tagIds: number[] = []
-        try { tagIds.push(await ensureTag(uid, "Prostate Assessment")) } catch { }
-        try { tagIds.push(await ensureTag(uid, `I-PSS: ${severity}`)) } catch { }
-
-        // Ensure partner (only if email is real)
-        let partnerId: number | undefined
-        if (email && !email.startsWith("anonymous_")) {
-          try {
-            partnerId = await ensurePartner(uid, email, fullName || "Anonymous")
-          } catch (e) {
-            console.warn("Odoo ensurePartner failed:", e)
-          }
-        }
-
-        // Create lead
-        const leadPayload: Record<string, any> = {
-          name: `I-PSS Assessment - ${severity}`,
-          contact_name: fullName || "Anonymous",
-          email_from: email || undefined,
-          partner_id: partnerId,
-          description,
-        }
-        if (tagIds.length > 0) {
-          leadPayload.tag_ids = [[6, 0, tagIds]]
-        }
-
-        const leadId = await createLead(uid, leadPayload)
-        console.log("Assessment sent to Odoo:", leadId, "dbId:", savedAssessmentId ?? "unknown")
-
-        // Optional note
+      let partnerId: number | undefined
+      if (email && !email.startsWith("anonymous_")) {
         try {
-          await postNote(uid, leadId, "Lead created via web assessment integration.")
-        } catch { }
-      } catch (err) {
-        console.error("Odoo integration error:", err)
+          partnerId = await ensurePartner(uid, email, fullName || "Anonymous")
+        } catch (e) {
+          console.warn("Odoo ensurePartner failed:", e)
+        }
+      }
+      console.log("Odoo partner ensured", { partnerId })
+
+      const leadPayload: Record<string, any> = {
+        name: `PSAT Assessment - ${fullName || "Anonymous"}`,
+        contact_name: fullName || "Anonymous",
+        email_from: email || undefined,
+        partner_id: partnerId,
+        description,
+      }
+      if (tagIds.length > 0) {
+        leadPayload.tag_ids = [[6, 0, tagIds]]
+      }
+
+      const leadId = await createLead(uid, leadPayload)
+      console.log("Odoo lead created", { leadId, dbId: savedAssessmentId ?? "unknown" })
+
+      try {
+        await postNote(uid, leadId, "Lead created via PSAT web assessment integration.")
+      } catch (e) {
+        console.warn("Odoo postNote failed", e)
       }
     })()
+
+    await Promise.race([
+      odooSync,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Odoo sync timeout after 20s")), 20_000)),
+    ]).catch((err) => {
+      console.error("Odoo sync failed", {
+        message: err?.message,
+        stack: err?.stack,
+      })
+    })
 
     return NextResponse.json(
       {
