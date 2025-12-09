@@ -79,7 +79,8 @@ export async function POST(req: Request) {
       if (typeof c.email === "string" && c.email.trim()) email = c.email.trim().toLowerCase()
     }
 
-    // Save assessment to database
+    // Save assessment to database (independent)
+    let savedAssessmentId: number | null = null
     try {
       const savedAssessment = await prisma.prostateAssessment.create({
         data: {
@@ -104,81 +105,82 @@ export async function POST(req: Request) {
         },
       })
 
+      savedAssessmentId = savedAssessment.id
       console.log("Assessment saved to database:", savedAssessment.id)
-
-      // Fire-and-forget Odoo push (non-blocking; errors are logged)
-      void (async () => {
-        try {
-          const conditions = conditionsArr
-          const responsesList = responses
-            .map((v, i) => `• Q${i + 1}: ${v}`)
-            .join("\n")
-
-          const descriptionLines: string[] = [
-            `Personal Information`,
-            `• Name: ${fullName || "Anonymous"}`,
-            `• Email: ${email || "N/A"}`,
-            `• Age: ${age}`,
-            `• Sex: ${String(demo.sex)}`,
-            ``,
-            `Assessment Results`,
-            `• I-PSS Score: ${score}/35`,
-            `• Severity: ${severity}`,
-            ``,
-            `Medical History`,
-            `• Conditions: ${conditions.length ? conditions.join(", ") : "None"}`,
-            `• Family History: ${familyHistoryStr ?? "N/A"}`,
-            `• Surgeries: ${surgeriesStr ?? "N/A"}`,
-            ``,
-            `Responses`,
-            responsesList,
-          ]
-          const description = descriptionLines.join("\n")
-
-          const uid = await odooAuthenticate()
-
-          // Ensure tags
-          const tagIds: number[] = []
-          try { tagIds.push(await ensureTag(uid, "Prostate Assessment")) } catch {}
-          try { tagIds.push(await ensureTag(uid, `I-PSS: ${severity}`)) } catch {}
-
-          // Ensure partner (only if email is real)
-          let partnerId: number | undefined
-          if (email && !email.startsWith("anonymous_")) {
-            try {
-              partnerId = await ensurePartner(uid, email, fullName || "Anonymous")
-            } catch (e) {
-              console.warn("Odoo ensurePartner failed:", e)
-            }
-          }
-
-          // Create lead
-          const leadPayload: Record<string, any> = {
-            name: `I-PSS Assessment - ${severity}`,
-            contact_name: fullName || "Anonymous",
-            email_from: email || undefined,
-            partner_id: partnerId,
-            description,
-          }
-          if (tagIds.length > 0) {
-            leadPayload.tag_ids = [[6, 0, tagIds]]
-          }
-
-          const leadId = await createLead(uid, leadPayload)
-
-          // Optional note
-          try {
-            await postNote(uid, leadId, "Lead created via web assessment integration.")
-          } catch {}
-        } catch (err) {
-          console.error("Odoo integration error:", err)
-        }
-      })()
-
     } catch (dbError) {
       console.error("Database save error:", dbError)
-      // Continue with response even if database save fails
+      // Continue - DB failure shouldn't block Odoo or response
     }
+
+    // Send to Odoo (fire-and-forget, independent of DB result)
+    void (async () => {
+      try {
+        const conditions = conditionsArr
+        const responsesList = responses
+          .map((v, i) => `• Q${i + 1}: ${v}`)
+          .join("\n")
+
+        const descriptionLines: string[] = [
+          `Personal Information`,
+          `• Name: ${fullName || "Anonymous"}`,
+          `• Email: ${email || "N/A"}`,
+          `• Age: ${age}`,
+          `• Sex: ${String(demo.sex)}`,
+          ``,
+          `Assessment Results`,
+          `• I-PSS Score: ${score}/35`,
+          `• Severity: ${severity}`,
+          ``,
+          `Medical History`,
+          `• Conditions: ${conditions.length ? conditions.join(", ") : "None"}`,
+          `• Family History: ${familyHistoryStr ?? "N/A"}`,
+          `• Surgeries: ${surgeriesStr ?? "N/A"}`,
+          ``,
+          `Responses`,
+          responsesList,
+        ]
+        const description = descriptionLines.join("\n")
+
+        const uid = await odooAuthenticate()
+
+        // Ensure tags
+        const tagIds: number[] = []
+        try { tagIds.push(await ensureTag(uid, "Prostate Assessment")) } catch { }
+        try { tagIds.push(await ensureTag(uid, `I-PSS: ${severity}`)) } catch { }
+
+        // Ensure partner (only if email is real)
+        let partnerId: number | undefined
+        if (email && !email.startsWith("anonymous_")) {
+          try {
+            partnerId = await ensurePartner(uid, email, fullName || "Anonymous")
+          } catch (e) {
+            console.warn("Odoo ensurePartner failed:", e)
+          }
+        }
+
+        // Create lead
+        const leadPayload: Record<string, any> = {
+          name: `I-PSS Assessment - ${severity}`,
+          contact_name: fullName || "Anonymous",
+          email_from: email || undefined,
+          partner_id: partnerId,
+          description,
+        }
+        if (tagIds.length > 0) {
+          leadPayload.tag_ids = [[6, 0, tagIds]]
+        }
+
+        const leadId = await createLead(uid, leadPayload)
+        console.log("Assessment sent to Odoo:", leadId, "dbId:", savedAssessmentId ?? "unknown")
+
+        // Optional note
+        try {
+          await postNote(uid, leadId, "Lead created via web assessment integration.")
+        } catch { }
+      } catch (err) {
+        console.error("Odoo integration error:", err)
+      }
+    })()
 
     return NextResponse.json(
       {
@@ -187,12 +189,12 @@ export async function POST(req: Request) {
         severity,
         severityColor: severity.toLowerCase(),
         ageContext: age < 50 ? "About 40% of men in their 40s have enlargement; not all have symptoms." :
-                   age < 60 ? "About 50% experience symptoms; regular check-ups important." :
-                   "About 70% experience symptoms; regular check-ups essential.",
+          age < 60 ? "About 50% experience symptoms; regular check-ups important." :
+            "About 70% experience symptoms; regular check-ups essential.",
         medicalContext: ["Medical context analysis available."],
         recommendations: severity === "Mild" ? "No immediate treatment needed. Discuss symptoms during your next regular check-up if they persist or worsen." :
-                        severity === "Moderate" ? "Schedule an appointment with your healthcare provider. Medications or minimally invasive options may be helpful." :
-                        "See your healthcare provider or urologist as soon as possible for evaluation and treatment options.",
+          severity === "Moderate" ? "Schedule an appointment with your healthcare provider. Medications or minimally invasive options may be helpful." :
+            "See your healthcare provider or urologist as soon as possible for evaluation and treatment options.",
         redFlags: [
           "Complete inability to urinate",
           "Painful or burning urination",
